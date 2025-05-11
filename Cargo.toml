@@ -95,6 +95,8 @@ default = [
     "dep:regex",
     "dep:env_logger",
     "ix_always_defrag",
+    "measure_trace_rate",
+    "measure_rc_rate",
     # "no_meta_counting",
 ]
 
