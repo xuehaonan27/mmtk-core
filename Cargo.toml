@@ -95,8 +95,8 @@ default = [
     "dep:regex",
     "dep:env_logger",
     "ix_always_defrag",
-    "measure_trace_rate",
-    "measure_rc_rate",
+    # "measure_trace_rate",
+    # "measure_rc_rate",
     # "no_meta_counting",
 ]
 
@@ -131,6 +131,7 @@ block_state_reset_bug = []
 fragmentation_analysis = []
 periodic_fragmentation_analysis = ["fragmentation_analysis"]
 g3_compatibilities = []
+gc_log_new_chunk = []
 
 ss_los_16m = []
 ss_tlab_4k = []

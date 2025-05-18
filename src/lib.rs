@@ -693,7 +693,7 @@ impl RCStat {
         if pause != Pause::RefCount {
             return;
         }
-        eprintln!(
+        gc_log!([2]
             "<<<RC-STAT>>> {:.3}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}",
             pause_time,
             self.total_incs.load(Ordering::SeqCst),

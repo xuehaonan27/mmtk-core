@@ -768,6 +768,12 @@ pub static INC_PACKETS_TIME: AtomicUsize = AtomicUsize::new(0);
 pub static INC_OBJS: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "measure_rc_rate")]
 pub static COPY_OBJS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "measure_rc_rate")]
+pub static DEC_PACKETS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "measure_rc_rate")]
+pub static DEC_PACKETS_TIME: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "measure_rc_rate")]
+pub static DEC_OBJS: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(feature = "measure_rc_rate")]
 pub fn dump_rc_rate() {
@@ -783,10 +789,27 @@ pub fn dump_rc_rate() {
         " - RC-INCS-RATE: {:.1}",
         INC_OBJS.load(Ordering::SeqCst) as f32 / t,
     );
+    gc_log!(
+        " - RC-DECS: packets={} total-time={}ms dec-objs={}",
+        DEC_PACKETS.load(Ordering::SeqCst),
+        DEC_PACKETS_TIME.load(Ordering::SeqCst) / 1000,
+        DEC_OBJS.load(Ordering::SeqCst),
+    );
+    let dec_time = DEC_PACKETS_TIME.load(Ordering::SeqCst) as f32 / 1000f32;
+    if dec_time > 0.0 {
+        gc_log!(
+            " - RC-DECS-RATE: {:.1}",
+            DEC_OBJS.load(Ordering::SeqCst) as f32 / dec_time,
+        );
+    }
+    // Reset counters
     INC_PACKETS.store(0, Ordering::SeqCst);
     INC_PACKETS_TIME.store(0, Ordering::SeqCst);
     INC_OBJS.store(0, Ordering::SeqCst);
     COPY_OBJS.store(0, Ordering::SeqCst);
+    DEC_PACKETS.store(0, Ordering::SeqCst);
+    DEC_PACKETS_TIME.store(0, Ordering::SeqCst);
+    DEC_OBJS.store(0, Ordering::SeqCst);
 }
 
 pub struct ProcessDecs<VM: VMBinding> {
@@ -800,6 +823,8 @@ pub struct ProcessDecs<VM: VMBinding> {
     cm_in_progress: bool,
     mature_sweeping_in_progress: bool,
     rc: RefCountHelper<VM>,
+    #[cfg(feature = "measure_rc_rate")]
+    dec_objs: usize,
 }
 
 impl<VM: VMBinding> ProcessDecs<VM> {
@@ -822,6 +847,8 @@ impl<VM: VMBinding> ProcessDecs<VM> {
             cm_in_progress: false,
             mature_sweeping_in_progress: false,
             rc: RefCountHelper::NEW,
+            #[cfg(feature = "measure_rc_rate")]
+            dec_objs: 0,
         }
     }
 
@@ -838,6 +865,8 @@ impl<VM: VMBinding> ProcessDecs<VM> {
             cm_in_progress: false,
             mature_sweeping_in_progress: false,
             rc: RefCountHelper::NEW,
+            #[cfg(feature = "measure_rc_rate")]
+            dec_objs: 0,
         }
     }
 
@@ -1013,6 +1042,10 @@ impl<VM: VMBinding> ProcessDecs<VM> {
                 if c == 0 || c == MAX_REF_COUNT {
                     None /* sticky */
                 } else {
+                    #[cfg(feature = "measure_rc_rate")]
+                    {
+                        self.dec_objs += 1;
+                    }
                     Some(c - 1)
                 }
             });
@@ -1030,6 +1063,9 @@ impl<VM: VMBinding> ProcessDecs<VM> {
 
 impl<VM: VMBinding> GCWork<VM> for ProcessDecs<VM> {
     fn do_work(&mut self, _worker: &mut GCWorker<VM>, mmtk: &'static MMTK<VM>) {
+        #[cfg(any(feature = "log_outstanding_packets", feature = "measure_rc_rate"))]
+        let t = std::time::SystemTime::now();
+
         if cfg!(feature = "lxr_no_decs") {
             return;
         }
@@ -1071,6 +1107,14 @@ impl<VM: VMBinding> GCWork<VM> for ProcessDecs<VM> {
         self.flush();
         if cfg!(feature = "rust_mem_counter") {
             crate::rust_mem_counter::DEC_BUFFER_COUNTER.sub(count);
+        }
+
+        #[cfg(feature = "measure_rc_rate")]
+        {
+            let us = t.elapsed().unwrap().as_micros() as usize;
+            DEC_PACKETS_TIME.fetch_add(us, Ordering::SeqCst);
+            DEC_PACKETS.fetch_add(1, Ordering::SeqCst);
+            DEC_OBJS.fetch_add(self.dec_objs, Ordering::SeqCst);
         }
     }
 }

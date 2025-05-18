@@ -549,7 +549,9 @@ impl<VM: VMBinding, B: Region> BlockPageResource<VM, B> {
         }
         // 1. Get a new chunk
         let chunk = self.alloc_chunk(space).unwrap();
-        gc_log!([3] "new-chunk: {:?} (total={})", chunk.start(), chunks.len());
+        if cfg!(feature = "gc_log_new_chunk") {
+            gc_log!([3] "new-chunk: {:?} (total={})", chunk.start(), chunks.len());
+        }
         // 2. Take the first N blocks in the chunk as the allocation result
         let count = usize::min(alloc_count, Self::BLOCKS_IN_CHUNK);
         for i in 0..count {
