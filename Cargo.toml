@@ -106,6 +106,7 @@ default = [
 builtin_env_logger = ["dep:env_logger"]
 
 # default = []
+barrier_rc_metrics = []
 nightly = []
 asan = []
 nontemporal = []

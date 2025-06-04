@@ -207,10 +207,13 @@ impl<VM: VMBinding> LXRFieldBarrierSemantics<VM> {
         slot: VM::VMSlot,
         _new: Option<ObjectReference>,
     ) -> bool {
+        #[cfg(feature = "barrier_rc_metrics")]
+        let t = std::time::SystemTime::now();
+
         if TAKERATE_MEASUREMENT && self.mmtk.inside_harness() {
             FAST_COUNT.fetch_add(1, Ordering::SeqCst);
         }
-        if let Ok(old) = self.log_slot_and_get_old_target(slot) {
+        let ret = if let Ok(old) = self.log_slot_and_get_old_target(slot) {
             if TAKERATE_MEASUREMENT && self.mmtk.inside_harness() {
                 SLOW_COUNT.fetch_add(1, Ordering::SeqCst);
             }
@@ -218,7 +221,16 @@ impl<VM: VMBinding> LXRFieldBarrierSemantics<VM> {
             true
         } else {
             false
+        };
+
+        #[cfg(feature = "barrier_rc_metrics")]
+        {
+            let us = t.elapsed().unwrap().as_nanos() as usize;
+            BARRIER_RC_TIME.fetch_add(us, Ordering::SeqCst);
+            BARRIER_RC_COUNT.fetch_add(1, Ordering::SeqCst);
         }
+
+        ret
     }
 
     fn should_create_satb_packets(&self) -> bool {
@@ -352,4 +364,20 @@ impl<VM: VMBinding> BarrierSemantics for LXRFieldBarrierSemantics<VM> {
             }
         }
     }
+}
+
+#[cfg(feature = "barrier_rc_metrics")]
+pub static BARRIER_RC_TIME: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "barrier_rc_metrics")]
+pub static BARRIER_RC_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(feature = "barrier_rc_metrics")]
+pub fn dump_barrier_rc_metrics() {
+    gc_log!(
+        " - BARRIER-RC: time={}, count={}",
+        BARRIER_RC_TIME.load(Ordering::SeqCst),
+        BARRIER_RC_COUNT.load(Ordering::SeqCst),
+    );
+    BARRIER_RC_TIME.store(0, Ordering::SeqCst);
+    BARRIER_RC_COUNT.store(0, Ordering::SeqCst);
 }

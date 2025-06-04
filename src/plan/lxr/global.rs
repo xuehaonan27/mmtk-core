@@ -313,6 +313,10 @@ impl<VM: VMBinding> Plan for LXR<VM> {
         if crate::verbose(3) {
             super::rc::dump_rc_rate();
         }
+        #[cfg(feature = "barrier_rc_metrics")]
+        if crate::verbose(3) {
+            super::barrier::dump_barrier_rc_metrics();
+        }
         let _new_ratio = super::SURVIVAL_RATIO_PREDICTOR.update_ratio();
         let pause = self.current_pause().unwrap();
         if pause == Pause::FinalMark || pause == Pause::Full {

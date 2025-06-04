@@ -3,6 +3,10 @@ use std::{
     fmt::{self, Write},
 };
 
+use std::sync::{Mutex, LazyLock};
+use std::fs::File;
+pub static GC_LOG_FILE: LazyLock<Mutex<Option<File>>> = LazyLock::new(|| Mutex::new(None));
+
 #[macro_export]
 macro_rules! gc_log {
     ([$level: literal] $($arg:tt)*) => {{
@@ -51,7 +55,10 @@ pub fn _flush() {
     LOCAL_LOG_BUFFER.with(|buf| {
         let buf = unsafe { &mut *buf.get() };
         if !buf.is_empty() {
-            eprint!("{}", buf);
+            // eprint!("{}", buf);
+            use std::io::Write;
+            let mut gc_log_file = GC_LOG_FILE.lock().unwrap();
+            let _ = gc_log_file.as_mut().unwrap().write_all(buf.as_bytes()); // ignore error
             buf.clear();
         }
     });

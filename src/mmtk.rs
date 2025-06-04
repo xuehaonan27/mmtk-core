@@ -144,6 +144,12 @@ impl<VM: VMBinding> MMTK<VM> {
         // The first call will initialize SFT map. Other calls will be blocked until SFT map is initialized.
         crate::policy::sft_map::SFTRefStorage::pre_use_check();
         SFT_MAP.initialize_once(&create_sft_map);
+        let gc_log_file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&*options.gc_log_path).unwrap();
+        *crate::gc_log::GC_LOG_FILE.lock().unwrap() = Some(gc_log_file);
 
         let num_workers = if cfg!(feature = "single_worker") {
             1

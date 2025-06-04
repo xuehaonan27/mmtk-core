@@ -774,6 +774,10 @@ pub static DEC_PACKETS: AtomicUsize = AtomicUsize::new(0);
 pub static DEC_PACKETS_TIME: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "measure_rc_rate")]
 pub static DEC_OBJS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "measure_rc_rate")]
+pub static REC_DEC_OBJS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "measure_rc_rate")]
+pub static OVERFLOWED_REC_DEC_OBJS: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(feature = "measure_rc_rate")]
 pub fn dump_rc_rate() {
@@ -784,16 +788,26 @@ pub fn dump_rc_rate() {
         INC_OBJS.load(Ordering::SeqCst),
         COPY_OBJS.load(Ordering::SeqCst),
     );
+    gc_log!(
+        " - RC-INCS-TMICRO: {}",
+        INC_PACKETS_TIME.load(Ordering::SeqCst),
+    );
     let t = INC_PACKETS_TIME.load(Ordering::SeqCst) as f32 / 1000f32;
     gc_log!(
         " - RC-INCS-RATE: {:.1}",
         INC_OBJS.load(Ordering::SeqCst) as f32 / t,
     );
     gc_log!(
-        " - RC-DECS: packets={} total-time={}ms dec-objs={}",
+        " - RC-DECS: packets={} total-time={}ms dec-objs={} rec-dec-objs={} ovf-rec-dec-objs={}",
         DEC_PACKETS.load(Ordering::SeqCst),
         DEC_PACKETS_TIME.load(Ordering::SeqCst) / 1000,
         DEC_OBJS.load(Ordering::SeqCst),
+        REC_DEC_OBJS.load(Ordering::SeqCst),
+        OVERFLOWED_REC_DEC_OBJS.load(Ordering::SeqCst),
+    );
+    gc_log!(
+        " - RC-DECS-TMICRO: {}",
+        DEC_PACKETS_TIME.load(Ordering::SeqCst),
     );
     let dec_time = DEC_PACKETS_TIME.load(Ordering::SeqCst) as f32 / 1000f32;
     if dec_time > 0.0 {
@@ -810,6 +824,8 @@ pub fn dump_rc_rate() {
     DEC_PACKETS.store(0, Ordering::SeqCst);
     DEC_PACKETS_TIME.store(0, Ordering::SeqCst);
     DEC_OBJS.store(0, Ordering::SeqCst);
+    REC_DEC_OBJS.store(0, Ordering::SeqCst);
+    OVERFLOWED_REC_DEC_OBJS.store(0, Ordering::SeqCst);
 }
 
 pub struct ProcessDecs<VM: VMBinding> {
@@ -825,6 +841,10 @@ pub struct ProcessDecs<VM: VMBinding> {
     rc: RefCountHelper<VM>,
     #[cfg(feature = "measure_rc_rate")]
     dec_objs: usize,
+    #[cfg(feature = "measure_rc_rate")]
+    rec_dec_objs: usize,
+    #[cfg(feature = "measure_rc_rate")]
+    overflowed_rec_dec_objs: usize,
 }
 
 impl<VM: VMBinding> ProcessDecs<VM> {
@@ -849,6 +869,10 @@ impl<VM: VMBinding> ProcessDecs<VM> {
             rc: RefCountHelper::NEW,
             #[cfg(feature = "measure_rc_rate")]
             dec_objs: 0,
+            #[cfg(feature = "measure_rc_rate")]
+            rec_dec_objs: 0,
+            #[cfg(feature = "measure_rc_rate")]
+            overflowed_rec_dec_objs: 0,
         }
     }
 
@@ -867,6 +891,10 @@ impl<VM: VMBinding> ProcessDecs<VM> {
             rc: RefCountHelper::NEW,
             #[cfg(feature = "measure_rc_rate")]
             dec_objs: 0,
+            #[cfg(feature = "measure_rc_rate")]
+            rec_dec_objs: 0,
+            #[cfg(feature = "measure_rc_rate")]
+            overflowed_rec_dec_objs: 0,
         }
     }
 
@@ -957,7 +985,15 @@ impl<VM: VMBinding> ProcessDecs<VM> {
                         // println!(" -- rec dec {:?}.{:?} -> {:?}", o, slot, x);
                         if !out_of_heap {
                             let rc = self.rc.count(x);
+                            #[cfg(feature = "measure_rc_rate")]
+                            if rc == MAX_REF_COUNT {
+                                self.overflowed_rec_dec_objs += 1;
+                            }
                             if rc != MAX_REF_COUNT && rc != 0 {
+                                #[cfg(feature = "measure_rc_rate")]
+                                {
+                                    self.rec_dec_objs += 1;
+                                }
                                 self.recursive_dec(x);
                             }
                         } else {
@@ -1015,6 +1051,11 @@ impl<VM: VMBinding> ProcessDecs<VM> {
     }
 
     fn process_decs(&mut self, decs: &[ObjectReference], lxr: &LXR<VM>) {
+        #[cfg(feature = "measure_rc_rate")]
+        {
+            self.dec_objs += decs.len();
+        }
+
         for (i, o) in decs.iter().enumerate() {
             // println!("dec {:?}", o);
             // if o.is_null() {
@@ -1042,10 +1083,6 @@ impl<VM: VMBinding> ProcessDecs<VM> {
                 if c == 0 || c == MAX_REF_COUNT {
                     None /* sticky */
                 } else {
-                    #[cfg(feature = "measure_rc_rate")]
-                    {
-                        self.dec_objs += 1;
-                    }
                     Some(c - 1)
                 }
             });
@@ -1115,6 +1152,8 @@ impl<VM: VMBinding> GCWork<VM> for ProcessDecs<VM> {
             DEC_PACKETS_TIME.fetch_add(us, Ordering::SeqCst);
             DEC_PACKETS.fetch_add(1, Ordering::SeqCst);
             DEC_OBJS.fetch_add(self.dec_objs, Ordering::SeqCst);
+            REC_DEC_OBJS.fetch_add(self.rec_dec_objs, Ordering::SeqCst);
+            OVERFLOWED_REC_DEC_OBJS.fetch_add(self.overflowed_rec_dec_objs, Ordering::SeqCst);
         }
     }
 }
