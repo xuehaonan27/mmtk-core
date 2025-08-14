@@ -74,7 +74,7 @@ use std::collections::HashMap;
 ///
 /// Arguments:
 /// * `builder`: The reference to a MMTk builder.
-pub fn mmtk_init<VM: VMBinding>(builder: &MMTKBuilder) -> Box<MMTK<VM>> {
+pub fn mmtk_init<VM: VMBinding>(builder: &mut MMTKBuilder) -> Box<MMTK<VM>> {
     crate::util::logger::try_init();
     #[cfg(all(feature = "perf_counter", target_os = "linux"))]
     {
@@ -94,6 +94,11 @@ pub fn mmtk_init<VM: VMBinding>(builder: &MMTKBuilder) -> Box<MMTK<VM>> {
         }
     }
     crate::args::RuntimeArgs::init();
+    if *builder.options.heap_size_in_gib != 0 {
+        let mut vm_layout = crate::util::heap::vm_layout::VMLayout::new_64bit();
+        vm_layout.heap_end = vm_layout.heap_start + *builder.options.heap_size_in_gib * 1024 * 1024 * 1024 * 1024;
+        builder.set_vm_layout(vm_layout);
+    }
     let mmtk = builder.build();
 
     info!(

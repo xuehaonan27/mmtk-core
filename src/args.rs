@@ -124,6 +124,8 @@ pub const BUFFER_SIZE: usize = {
         512
     } else if cfg!(feature = "lxr_buf_256") {
         256
+    } else if cfg!(feature = "lxr_buf_4096") {
+        4096
     } else {
         1024
     }

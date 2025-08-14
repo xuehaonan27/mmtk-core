@@ -808,7 +808,7 @@ options! {
     /// Number of GC worker threads.
     threads:               usize                [env_var: true, command_line: true] [|v: &usize| *v > 0]    = num_cpus::get(),
     conc_threads:          usize                [env_var: true, command_line: true] [|v: &usize| *v > 0]    = num_cpus::get(),
-    gc_log_path:           String               [env_var: true, command_line: true]  [always_valid] = String::from("gc.log"),
+    gc_log_path:           String               [env_var: true, command_line: true]  [always_valid] = String::from("/home/xuehaonan/eval-disagg-gc/scripts/gc.log"),
     /// Enable an optimization that only scans the part of the stack that has changed since the last GC (not supported)
     use_short_stack_scans: bool                 [env_var: true, command_line: true]  [always_valid] = false,
     /// Enable a return barrier (not supported)
@@ -886,7 +886,9 @@ options! {
     /// This only affects the memory for MMTk spaces.
     transparent_hugepages: bool                  [env_var: true, command_line: true]  [|v: &bool| !v || cfg!(target_os = "linux")] = false,
     /// Count live bytes for objects in each space during a GC.
-    count_live_bytes_in_gc: bool                 [env_var: true, command_line: true] [always_valid] = false
+    count_live_bytes_in_gc: bool                 [env_var: true, command_line: true] [always_valid] = false,
+    /// Heap size in GiB
+    heap_size_in_gib: usize                      [env_var: true, command_line: true] [always_valid] = 0
 }
 
 #[cfg(test)]
